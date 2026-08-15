@@ -32,13 +32,9 @@ public class PlayerController : MonoBehaviour
     public string obstacleTag = "Obstacle";
 
     [Header("无敌与护盾")]
-    public SpriteRenderer shieldSpriteRenderer;      // 护盾/无敌精灵
+    public SpriteRenderer shieldSpriteRenderer;
     public Sprite invincibleSprite;
     public Sprite shieldSprite;
-
-    // 以下字段不再用于临时无敌闪烁，但保留以防其他地方使用
-    public SpriteRenderer playerSpriteRenderer;      // 后备（未使用）
-    public SpriteRenderer[] childSpriteRenderers;    // 未使用，但保留
 
     [Header("无敌闪烁")]
     public float blinkBeforeEnd = 2f;
@@ -218,27 +214,23 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // --- 临时无敌（护盾破碎后）：护盾精灵本身闪烁 ---
+        // --- 临时无敌（护盾破碎后） ---
         if (isTempInvincible)
         {
             tempInvincibleTimer -= Time.deltaTime;
             if (tempInvincibleTimer <= 0f)
             {
                 isTempInvincible = false;
-                // 临时无敌结束，更新护盾显示（此时 hasShield 为 false，所以会隐藏）
                 UpdateShieldVisual();
                 Debug.Log("🛡️ 临时无敌结束");
             }
             else
             {
-                // 强制显示护盾精灵并使其闪烁
                 if (shieldSpriteRenderer != null)
                 {
-                    shieldSpriteRenderer.sprite = shieldSprite;  // 使用护盾精灵
+                    shieldSpriteRenderer.sprite = shieldSprite;
                     shieldSpriteRenderer.enabled = Mathf.Floor(Time.time / tempBlinkInterval) % 2 == 0;
                 }
-                // 确保角色本身可见（不影响）
-                // 如果有子物体，不进行闪烁控制
             }
         }
 
@@ -316,17 +308,16 @@ public class PlayerController : MonoBehaviour
         if (!collision.gameObject.CompareTag(obstacleTag)) return;
         if (collision.gameObject.GetComponent<PolygonCollider2D>() == null) return;
 
+        // 免疫条件：开局无敌、临时无敌
         if (isInvincible || isTempInvincible) return;
 
         if (hasShield)
         {
             PlaySoundWithDelay(shieldBreakAudioSource, shieldBreakStartTime, shieldBreakDelay);
             hasShield = false;
-            // 护盾已碎，启动临时无敌（护盾精灵会闪烁显示）
+            UpdateShieldVisual();
             isTempInvincible = true;
             tempInvincibleTimer = tempInvincibleDuration;
-            // 注意：此时 UpdateShieldVisual 会被调用，但临时无敌期间会覆盖显示
-            UpdateShieldVisual(); // 会隐藏护盾，但临时无敌逻辑会覆盖
             Debug.Log($"🛡️ 护盾破碎，进入 {tempInvincibleDuration} 秒临时无敌（护盾精灵闪烁）");
             return;
         }
@@ -390,7 +381,6 @@ public class PlayerController : MonoBehaviour
         isInvincible = true;
         gameStartTime = Time.time;
         blinkTimer = 0f;
-        // 重置临时无敌
         isTempInvincible = false;
         tempInvincibleTimer = 0f;
         UpdateShieldVisual();
@@ -517,7 +507,6 @@ public class PlayerController : MonoBehaviour
     void UpdateShieldVisual()
     {
         if (shieldSpriteRenderer == null) return;
-        // 临时无敌期间由临时逻辑控制，这里不干预
         if (isTempInvincible) return;
 
         if (isInvincible && invincibleSprite != null)
@@ -541,15 +530,34 @@ public class PlayerController : MonoBehaviour
     {
         if (isGameOver || hasWon || isGameEnded) return;
 
-        if (currentJumpCount >= maxJumpCount && !hasShield)
+        if (currentJumpCount >= maxJumpCount)
         {
-            hasShield = true;
-            UpdateShieldVisual();
-            PlaySoundWithDelay(shieldAppearAudioSource, shieldAppearStartTime, shieldAppearDelay);
-            Debug.Log("🛡️ 满能量获得护盾！");
+            if (!hasShield)
+            {
+                hasShield = true;
+                UpdateShieldVisual();
+                PlaySoundWithDelay(shieldAppearAudioSource, shieldAppearStartTime, shieldAppearDelay);
+                Debug.Log("🛡️ 满能量获得护盾！");
+            }
             return;
         }
-        currentJumpCount = Mathf.Min(currentJumpCount + amount, maxJumpCount);
+
+        int remaining = maxJumpCount - currentJumpCount;
+        if (amount > remaining)
+        {
+            currentJumpCount = maxJumpCount;
+            if (!hasShield)
+            {
+                hasShield = true;
+                UpdateShieldVisual();
+                PlaySoundWithDelay(shieldAppearAudioSource, shieldAppearStartTime, shieldAppearDelay);
+                Debug.Log($"🛡️ 能量溢出！奖励 {amount} > 剩余 {remaining}，获得护盾！");
+            }
+        }
+        else
+        {
+            currentJumpCount = Mathf.Min(currentJumpCount + amount, maxJumpCount);
+        }
     }
 
     public int GetCurrentJumpCount() => currentJumpCount;

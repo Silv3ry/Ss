@@ -6,9 +6,16 @@ public class Spawner : MonoBehaviour
 {
     [Header("References")]
     public Transform player;
-    public GameObject rectanglePrefab;
-    public GameObject warningPrefab;
-    public GameObject ballPrefab;
+
+    // 三种障碍物预制体（对应不同奖励）
+    public GameObject rectanglePrefabNormal;   // 原版（掉落 +1）
+    public GameObject rectanglePrefabPlus2;    // 掉落 +2
+    public GameObject rectanglePrefabPlus4;    // 掉落 +4
+
+    // 三种能量球预制体（对应不同奖励）
+    public GameObject ballPrefabNormal;        // +1
+    public GameObject ballPrefabPlus2;         // +2
+    public GameObject ballPrefabPlus4;         // +4
 
     [Header("动态间隔设置")]
     public float minInterval = 0.8f;
@@ -30,6 +37,7 @@ public class Spawner : MonoBehaviour
     public float shrinkDuration = 0.2f;
 
     [Header("Warning Settings")]
+    public GameObject warningPrefab;
     public float warningDuration = 0.2f;
 
     [Header("Position Offset")]
@@ -59,6 +67,9 @@ public class Spawner : MonoBehaviour
     private Coroutine spawnCoroutine;
     private List<GameObject> spawnedObjects = new List<GameObject>();
 
+    // ---------- 枚举：障碍物类型 ----------
+    private enum ObstacleType { Normal, Plus2, Plus4 }
+
     void Start()
     {
         cam = Camera.main;
@@ -72,6 +83,48 @@ public class Spawner : MonoBehaviour
         spawnCoroutine = StartCoroutine(SpawnRoutine());
     }
 
+    // ---------- 进度计算 ----------
+    float GetProgress()
+    {
+        if (player == null) return 0f;
+        PlayerController pc = player.GetComponent<PlayerController>();
+        if (pc == null) return 0f;
+        float winY = pc.GetWinLineY();
+        if (winY <= startY) return 0f;
+        float progress = (player.position.y - startY) / (winY - startY);
+        return Mathf.Clamp01(progress);
+    }
+
+    // ---------- 根据进度选择障碍物类型（修正版） ----------
+    ObstacleType SelectObstacleType(float progress)
+    {
+        // progress = 0 为起点，1 为终点
+        // 分段：0~0.5 从 +4 过渡到 +2；0.5~1 从 +2 过渡到 +1
+        if (progress < 0.5f)
+        {
+            float t = progress / 0.5f; // 0~1
+            float p4 = 1 - t;          // +4 概率从1降到0
+            float p2 = t;              // +2 概率从0升到1
+            float rand = Random.value;
+            if (rand < p4)
+                return ObstacleType.Plus4;
+            else
+                return ObstacleType.Plus2;
+        }
+        else
+        {
+            float t = (progress - 0.5f) / 0.5f; // 0~1
+            float p2 = 1 - t;                  // +2 概率从1降到0
+            float p1 = t;                      // +1 概率从0升到1
+            float rand = Random.value;
+            if (rand < p2)
+                return ObstacleType.Plus2;
+            else
+                return ObstacleType.Normal;
+        }
+    }
+
+    // ---------- 生成协程 ----------
     IEnumerator SpawnRoutine()
     {
         while (true)
@@ -79,14 +132,20 @@ public class Spawner : MonoBehaviour
             float interval = GetDynamicInterval();
             yield return new WaitForSeconds(interval);
 
+            float progress = GetProgress();
+            ObstacleType type = SelectObstacleType(progress);
+
+            GameObject rectPrefab = GetRectanglePrefab(type);
+            GameObject ballPrefab = GetBallPrefab(type);
+            int bonus = GetBonus(type);
+
             Vector3 currentPos = nextSpawnPos;
             float currentAngle = nextAngle;
             float currentLength = nextLength;
-            bool currentLeft = nextIsLeft;
 
             PrepareNextSpawn();
 
-            GameObject rect = Instantiate(rectanglePrefab, currentPos, Quaternion.identity);
+            GameObject rect = Instantiate(rectPrefab, currentPos, Quaternion.identity);
             rect.transform.eulerAngles = new Vector3(0, 0, currentAngle);
             rect.transform.localScale = new Vector3(currentLength, width, 1);
             spawnedObjects.Add(rect);
@@ -101,7 +160,6 @@ public class Spawner : MonoBehaviour
             }
             else
             {
-                // 障碍音效（带延迟）
                 if (spawnAudioSource != null && spawnAudioSource.clip != null)
                     StartCoroutine(PlaySoundDelayed(spawnAudioSource, spawnStartTime, spawnDelay, false));
 
@@ -112,6 +170,9 @@ public class Spawner : MonoBehaviour
                     {
                         GameObject ball = Instantiate(ballPrefab, ballPos, Quaternion.identity);
                         ball.transform.localScale = Vector3.one * ballScale;
+                        Balll ballScript = ball.GetComponent<Balll>();
+                        if (ballScript != null)
+                            ballScript.jumpBonus = bonus;
                         spawnedObjects.Add(ball);
                     }
                 }
@@ -122,39 +183,41 @@ public class Spawner : MonoBehaviour
         }
     }
 
-    // ---------- 音效辅助 ----------
-    IEnumerator PlaySoundDelayed(AudioSource source, float startTime, float delay, bool loop)
+    // ---------- 辅助方法 ----------
+    GameObject GetRectanglePrefab(ObstacleType type)
     {
-        if (source == null || source.clip == null) yield break;
-        if (delay > 0)
-            yield return new WaitForSecondsRealtime(delay);
-        source.time = startTime;
-        source.loop = loop;
-        source.Play();
-    }
-
-    // ---------- 重置 ----------
-    public void ResetSpawner()
-    {
-        if (spawnCoroutine != null)
-            StopCoroutine(spawnCoroutine);
-
-        foreach (GameObject obj in spawnedObjects)
+        switch (type)
         {
-            if (obj != null) Destroy(obj);
+            case ObstacleType.Normal: return rectanglePrefabNormal ?? rectanglePrefabNormal;
+            case ObstacleType.Plus2: return rectanglePrefabPlus2 ?? rectanglePrefabNormal;
+            case ObstacleType.Plus4: return rectanglePrefabPlus4 ?? rectanglePrefabNormal;
+            default: return rectanglePrefabNormal;
         }
-        spawnedObjects.Clear();
-
-        consecutiveSameSide = 0;
-        lastSideLeft = false;
-        isFirstSpawn = true;
-
-        PrepareNextSpawn();
-        spawnCoroutine = StartCoroutine(SpawnRoutine());
-        Debug.Log("🔄 Spawner 已重置");
     }
 
-    // ---------- 辅助 ----------
+    GameObject GetBallPrefab(ObstacleType type)
+    {
+        switch (type)
+        {
+            case ObstacleType.Normal: return ballPrefabNormal ?? ballPrefabNormal;
+            case ObstacleType.Plus2: return ballPrefabPlus2 ?? ballPrefabNormal;
+            case ObstacleType.Plus4: return ballPrefabPlus4 ?? ballPrefabNormal;
+            default: return ballPrefabNormal;
+        }
+    }
+
+    int GetBonus(ObstacleType type)
+    {
+        switch (type)
+        {
+            case ObstacleType.Normal: return 1;
+            case ObstacleType.Plus2: return 2;
+            case ObstacleType.Plus4: return 4;
+            default: return 1;
+        }
+    }
+
+    // ---------- 动态间隔 ----------
     float GetDynamicInterval()
     {
         if (player == null) return maxInterval;
@@ -162,11 +225,11 @@ public class Spawner : MonoBehaviour
         if (pc == null) return maxInterval;
         float winY = pc.GetWinLineY();
         if (winY <= startY) return maxInterval;
-        float progress = (player.position.y - startY) / (winY - startY);
-        progress = Mathf.Clamp01(progress);
+        float progress = GetProgress();
         return Mathf.Lerp(maxInterval, minInterval, progress);
     }
 
+    // ---------- 左右平衡 ----------
     bool DecideNextSide()
     {
         bool newSide;
@@ -211,6 +274,7 @@ public class Spawner : MonoBehaviour
         nextLength = Random.Range(lengthMin, lengthMax);
     }
 
+    // ---------- 小球定位 ----------
     Vector3 GetBallPositionOnVerticalAxis(GameObject rect)
     {
         PolygonCollider2D poly = rect.GetComponent<PolygonCollider2D>();
@@ -262,6 +326,7 @@ public class Spawner : MonoBehaviour
         return new Vector2(verticalX, y);
     }
 
+    // ---------- 缩回 + 预警 ----------
     IEnumerator ShrinkAndDestroy(GameObject rect, float delay, float shrinkTime,
                                  Vector3 warningPos, float warningAngle, float warningLength)
     {
@@ -296,5 +361,37 @@ public class Spawner : MonoBehaviour
         yield return new WaitForSeconds(delay);
         if (warning != null)
             Destroy(warning);
+    }
+
+    // ---------- 重置 ----------
+    public void ResetSpawner()
+    {
+        if (spawnCoroutine != null)
+            StopCoroutine(spawnCoroutine);
+
+        foreach (GameObject obj in spawnedObjects)
+        {
+            if (obj != null) Destroy(obj);
+        }
+        spawnedObjects.Clear();
+
+        consecutiveSameSide = 0;
+        lastSideLeft = false;
+        isFirstSpawn = true;
+
+        PrepareNextSpawn();
+        spawnCoroutine = StartCoroutine(SpawnRoutine());
+        Debug.Log("🔄 Spawner 已重置");
+    }
+
+    // ---------- 音效辅助 ----------
+    IEnumerator PlaySoundDelayed(AudioSource source, float startTime, float delay, bool loop)
+    {
+        if (source == null || source.clip == null) yield break;
+        if (delay > 0)
+            yield return new WaitForSecondsRealtime(delay);
+        source.time = startTime;
+        source.loop = loop;
+        source.Play();
     }
 }
