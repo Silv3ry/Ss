@@ -18,8 +18,8 @@ public class Spawner : MonoBehaviour
     public GameObject ballPrefabPlus4;         // +4
 
     [Header("动态间隔设置")]
-    public float minInterval = 0.5f;
-    public float maxInterval = 2f;
+    public float minInterval = 0.8f;
+    public float maxInterval = 2.5f;
 
     [Header("Spawn Settings")]
     public float lengthMin = 1f;
