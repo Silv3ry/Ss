@@ -284,7 +284,7 @@ public class PlayerController : MonoBehaviour
     {
         if (currentJumpCount > 0)
         {
-            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
             currentJumpCount--;
             totalJumps++;
             PlaySoundWithDelay(jumpAudioSource, jumpStartTime, jumpDelay);
@@ -298,15 +298,15 @@ public class PlayerController : MonoBehaviour
 
     void ApplySlowFall()
     {
-        float newXVel = Mathf.Lerp(rb.velocity.x, 0f, horizontalDamping * Time.fixedDeltaTime);
-        rb.velocity = new Vector2(newXVel, -slowFallSpeed);
+        float newXVel = Mathf.Lerp(rb.linearVelocity.x, 0f, horizontalDamping * Time.fixedDeltaTime);
+        rb.linearVelocity = new Vector2(newXVel, -slowFallSpeed);
     }
 
     void ApplyAirDrag()
     {
         float dragFactor = 1f - airDrag * Time.fixedDeltaTime;
         if (dragFactor < 0) dragFactor = 0;
-        rb.velocity = new Vector2(rb.velocity.x * dragFactor, rb.velocity.y);
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x * dragFactor, rb.linearVelocity.y);
     }
 
     // ---------- 碰撞 ----------
@@ -378,7 +378,7 @@ public class PlayerController : MonoBehaviour
         Time.timeScale = 1f;
 
         transform.position = new Vector3(0, startY, 0);
-        rb.velocity = Vector2.zero;
+        rb.linearVelocity = Vector2.zero;
 
         if (startWithFullEnergy)
             currentJumpCount = maxJumpCount;
