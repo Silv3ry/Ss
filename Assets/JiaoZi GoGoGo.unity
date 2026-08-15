@@ -1328,6 +1328,50 @@ MonoBehaviour:
   m_OnValueChanged:
     m_PersistentCalls:
       m_Calls: []
+--- !u!1 &477559446
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 477559448}
+  - component: {fileID: 477559447}
+  m_Layer: 0
+  m_Name: Popup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &477559447
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 477559446}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 521eee4ebdb7cd5479c9e2456ec61b2f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!4 &477559448
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 477559446}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &511201453
 GameObject:
   m_ObjectHideFlags: 0
@@ -2121,8 +2165,8 @@ MonoBehaviour:
   ballPrefabNormal: {fileID: 77552688}
   ballPrefabPlus2: {fileID: 1701423392}
   ballPrefabPlus4: {fileID: 1894254224}
-  minInterval: 0.5
-  maxInterval: 2
+  minInterval: 0.75
+  maxInterval: 2.25
   lengthMin: 2
   lengthMax: 3
   width: 0.2
@@ -3219,13 +3263,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 90b4e6ec86554024c919130885b8dd78, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  inputMode: 0
+  inputMode: 1
   jumpForce: 17
   maxJumpCount: 4
   gravityScale: 1
   airDrag: 15
   startWithFullEnergy: 0
-  initialJumpCount: 2
+  initialJumpCount: 3
   startWithShield: 0
   invincibleDuration: 5
   slowFallSpeed: 3
@@ -3234,8 +3278,6 @@ MonoBehaviour:
   shieldSpriteRenderer: {fileID: 1914483432}
   invincibleSprite: {fileID: 6206601066759602668, guid: 3cc3f8ff27ebfef468136c16b53fd085, type: 3}
   shieldSprite: {fileID: 3795613316010236618, guid: 28469b0b8e533b14a9a7201432c70ce3, type: 3}
-  playerSpriteRenderer: {fileID: 196394176}
-  childSpriteRenderers: []
   blinkBeforeEnd: 2
   blinkInterval: 0.01
   tempInvincibleDuration: 1
@@ -3244,7 +3286,7 @@ MonoBehaviour:
   grayOverlayImage: {fileID: 0}
   feedbackFadeSpeed: 5
   winLineObject: {fileID: 185682323}
-  winLineYOffset: 400
+  winLineYOffset: 200
   bottomLineObject: {fileID: 1430281580}
   bottomLineDistance: 8
   bottomLineFollowSpeed: 0.5
@@ -4208,8 +4250,8 @@ Transform:
   m_GameObject: {fileID: 1701423392}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -15.541, y: 6.964, z: 0}
-  m_LocalScale: {x: 0.08277573, y: 0.08277573, z: 0.08277573}
+  m_LocalPosition: {x: -15.5627, y: 6.9908, z: 0}
+  m_LocalScale: {x: 0.07327329, y: 0.07327329, z: 0.07327329}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -5146,3 +5188,4 @@ SceneRoots:
   - {fileID: 1430281583}
   - {fileID: 2125350083}
   - {fileID: 156144945}
+  - {fileID: 477559448}

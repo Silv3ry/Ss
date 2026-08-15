@@ -308,6 +308,7 @@ public class PlayerController : MonoBehaviour
         if (!collision.gameObject.CompareTag(obstacleTag)) return;
         if (collision.gameObject.GetComponent<PolygonCollider2D>() == null) return;
 
+        // 免疫条件：开局无敌、临时无敌
         if (isInvincible || isTempInvincible) return;
 
         if (hasShield)
@@ -529,7 +530,6 @@ public class PlayerController : MonoBehaviour
     {
         if (isGameOver || hasWon || isGameEnded) return;
 
-        // 如果已经满能量：按原有逻辑，若无护盾则给予护盾
         if (currentJumpCount >= maxJumpCount)
         {
             if (!hasShield)
@@ -543,8 +543,6 @@ public class PlayerController : MonoBehaviour
         }
 
         int remaining = maxJumpCount - currentJumpCount;
-
-        // 如果奖励量大于剩余槽位：填满能量，并给予护盾（若没有）
         if (amount > remaining)
         {
             currentJumpCount = maxJumpCount;
@@ -558,7 +556,6 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            // 正常增加能量（不超过上限）
             currentJumpCount = Mathf.Min(currentJumpCount + amount, maxJumpCount);
         }
     }
