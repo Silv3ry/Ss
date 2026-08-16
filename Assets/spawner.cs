@@ -6,13 +6,10 @@ public class Spawner : MonoBehaviour
 {
     [Header("References")]
     public Transform player;
-
-    // 三种障碍物预制体（对应不同奖励）
     public GameObject rectanglePrefabNormal;   // 原版（掉落 +1）
     public GameObject rectanglePrefabPlus2;    // 掉落 +2
     public GameObject rectanglePrefabPlus4;    // 掉落 +4
-
-    // 三种能量球预制体（对应不同奖励）
+    public GameObject warningPrefab;
     public GameObject ballPrefabNormal;        // +1
     public GameObject ballPrefabPlus2;         // +2
     public GameObject ballPrefabPlus4;         // +4
@@ -34,11 +31,10 @@ public class Spawner : MonoBehaviour
 
     [Header("Lifecycle")]
     public float lifeTime = 0.5f;
-    public float shrinkDuration = 0.2f;
+    public float shrinkDuration = 0.2f;        // 缩回时间（不影响预警）
 
     [Header("Warning Settings")]
-    public GameObject warningPrefab;
-    public float warningDuration = 0.2f;
+    public float warningLeadTime = 0.2f;        // 预警在障碍物出现前多少秒出现并淡入至100%
 
     [Header("Position Offset")]
     public float yOffset = 0f;
@@ -79,6 +75,7 @@ public class Spawner : MonoBehaviour
             Debug.LogError("❌ 未找到玩家！");
 
         startY = player.position.y;
+        // 初始化第一次参数
         PrepareNextSpawn();
         spawnCoroutine = StartCoroutine(SpawnRoutine());
     }
@@ -95,16 +92,14 @@ public class Spawner : MonoBehaviour
         return Mathf.Clamp01(progress);
     }
 
-    // ---------- 根据进度选择障碍物类型（修正版） ----------
+    // ---------- 根据进度选择障碍物类型 ----------
     ObstacleType SelectObstacleType(float progress)
     {
-        // progress = 0 为起点，1 为终点
-        // 分段：0~0.5 从 +4 过渡到 +2；0.5~1 从 +2 过渡到 +1
         if (progress < 0.5f)
         {
-            float t = progress / 0.5f; // 0~1
-            float p4 = 1 - t;          // +4 概率从1降到0
-            float p2 = t;              // +2 概率从0升到1
+            float t = progress / 0.5f;
+            float p4 = 1 - t;
+            float p2 = t;
             float rand = Random.value;
             if (rand < p4)
                 return ObstacleType.Plus4;
@@ -113,9 +108,9 @@ public class Spawner : MonoBehaviour
         }
         else
         {
-            float t = (progress - 0.5f) / 0.5f; // 0~1
-            float p2 = 1 - t;                  // +2 概率从1降到0
-            float p1 = t;                      // +1 概率从0升到1
+            float t = (progress - 0.5f) / 0.5f;
+            float p2 = 1 - t;
+            float p1 = t;
             float rand = Random.value;
             if (rand < p2)
                 return ObstacleType.Plus2;
@@ -124,26 +119,30 @@ public class Spawner : MonoBehaviour
         }
     }
 
-    // ---------- 生成协程 ----------
+    // ---------- 生成协程（修复预警时机） ----------
     IEnumerator SpawnRoutine()
     {
         while (true)
         {
+            // 1. 获取本次间隔（用于等待和生成预警参考）
             float interval = GetDynamicInterval();
+
+            // 2. 等待间隔（此时下一个障碍物将在 interval 秒后生成）
             yield return new WaitForSeconds(interval);
 
-            float progress = GetProgress();
-            ObstacleType type = SelectObstacleType(progress);
-
-            GameObject rectPrefab = GetRectanglePrefab(type);
-            GameObject ballPrefab = GetBallPrefab(type);
-            int bonus = GetBonus(type);
-
+            // 3. 使用当前的 nextSpawnPos 生成障碍物（这些参数在循环外部或上一次循环中已经设置）
             Vector3 currentPos = nextSpawnPos;
             float currentAngle = nextAngle;
             float currentLength = nextLength;
 
-            PrepareNextSpawn();
+            // --- 生成障碍物 ---
+            GameObject rectPrefab = GetRectanglePrefab(SelectObstacleType(GetProgress())); // 但类型应基于当前进度，这里重新计算，但应与之前一致
+            // 实际上，为了准确，我们在生成前就计算类型，但为了复用，我们可以先确定类型。
+            float currentProgress = GetProgress();
+            ObstacleType type = SelectObstacleType(currentProgress);
+            rectPrefab = GetRectanglePrefab(type);
+            GameObject ballPrefab = GetBallPrefab(type);
+            int bonus = GetBonus(type);
 
             GameObject rect = Instantiate(rectPrefab, currentPos, Quaternion.identity);
             rect.transform.eulerAngles = new Vector3(0, 0, currentAngle);
@@ -178,12 +177,28 @@ public class Spawner : MonoBehaviour
                 }
             }
 
-            StartCoroutine(ShrinkAndDestroy(rect, lifeTime, shrinkDuration,
-                                            nextSpawnPos, nextAngle, nextLength));
+            // 4. 预计算下一次参数（用于预警和下一次生成）
+            PrepareNextSpawn();
+            // 获取下一次的间隔（作为下一次等待和预警的依据）
+            float nextInterval = GetDynamicInterval();
+
+            // 5. 启动预警协程（为下一次障碍物准备）
+            if (warningPrefab != null && warningLeadTime > 0)
+            {
+                StartCoroutine(SpawnWarningForNext(nextInterval, nextSpawnPos, nextAngle, nextLength));
+            }
+
+            // 6. 缩回当前障碍物
+            StartCoroutine(ShrinkRect(rect, lifeTime, shrinkDuration));
+
+            // 7. 更新间隔为下一次间隔，用于下次循环等待（因为我们已经等待了本次 interval，下次等待应基于 nextInterval）
+            // 但此处我们不需要额外操作，因为循环会重新获取间隔，但为了确保一致性，我们可以在循环末尾将 interval 设为 nextInterval？
+            // 实际上，由于我们已经在循环开头获取了 interval，并等待了它，现在 nextInterval 是下次要用的，但下一次循环会重新计算，所以这里不赋值。
+            // 但为了预警的精确性，我们已在预警协程中使用了 nextInterval，所以没问题。
         }
     }
 
-    // ---------- 辅助方法 ----------
+    // ---------- 辅助：获取预制体 ----------
     GameObject GetRectanglePrefab(ObstacleType type)
     {
         switch (type)
@@ -326,21 +341,55 @@ public class Spawner : MonoBehaviour
         return new Vector2(verticalX, y);
     }
 
-    // ---------- 缩回 + 预警 ----------
-    IEnumerator ShrinkAndDestroy(GameObject rect, float delay, float shrinkTime,
-                                 Vector3 warningPos, float warningAngle, float warningLength)
+    // ---------- 预警生成协程（使用下一次间隔） ----------
+    IEnumerator SpawnWarningForNext(float nextInterval, Vector3 pos, float angle, float length)
+    {
+        // 计算等待时间：在下次障碍物出现前 warningLeadTime 秒
+        float waitTime = nextInterval - warningLeadTime;
+        if (waitTime < 0) waitTime = 0;
+
+        yield return new WaitForSeconds(waitTime);
+
+        // 生成预警
+        GameObject warning = Instantiate(warningPrefab, pos, Quaternion.identity);
+        warning.transform.eulerAngles = new Vector3(0, 0, angle);
+        warning.transform.localScale = new Vector3(length, width, 1);
+        spawnedObjects.Add(warning);
+
+        SpriteRenderer sr = warning.GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            // 初始透明
+            Color c = sr.color;
+            c.a = 0f;
+            sr.color = c;
+
+            // 淡入时间：应为 warningLeadTime，但不能超过 nextInterval（因为障碍物出现时需达到1）
+            float fadeDuration = Mathf.Min(warningLeadTime, nextInterval);
+            float timer = 0f;
+            while (timer < fadeDuration)
+            {
+                timer += Time.deltaTime;
+                float progress = timer / fadeDuration;
+                Color c2 = sr.color;
+                c2.a = Mathf.Lerp(0f, 1f, progress);
+                sr.color = c2;
+                yield return null;
+            }
+            // 确保达到1
+            Color full = sr.color;
+            full.a = 1f;
+            sr.color = full;
+        }
+
+        // 淡入完成，立即销毁预警（因为此时障碍物已经出现）
+        Destroy(warning);
+    }
+
+    // ---------- 缩回障碍物 ----------
+    IEnumerator ShrinkRect(GameObject rect, float delay, float shrinkTime)
     {
         yield return new WaitForSeconds(delay);
-
-        GameObject warning = null;
-        if (warningPrefab != null)
-        {
-            warning = Instantiate(warningPrefab, warningPos, Quaternion.identity);
-            warning.transform.eulerAngles = new Vector3(0, 0, warningAngle);
-            warning.transform.localScale = new Vector3(warningLength, width, 1);
-            spawnedObjects.Add(warning);
-            StartCoroutine(DestroyWarningAfterDelay(warning, warningDuration));
-        }
 
         float startScaleX = rect.transform.localScale.x;
         float elapsed = 0f;
@@ -356,11 +405,15 @@ public class Spawner : MonoBehaviour
         Destroy(rect);
     }
 
-    IEnumerator DestroyWarningAfterDelay(GameObject warning, float delay)
+    // ---------- 音效辅助 ----------
+    IEnumerator PlaySoundDelayed(AudioSource source, float startTime, float delay, bool loop)
     {
-        yield return new WaitForSeconds(delay);
-        if (warning != null)
-            Destroy(warning);
+        if (source == null || source.clip == null) yield break;
+        if (delay > 0)
+            yield return new WaitForSecondsRealtime(delay);
+        source.time = startTime;
+        source.loop = loop;
+        source.Play();
     }
 
     // ---------- 重置 ----------
@@ -382,16 +435,5 @@ public class Spawner : MonoBehaviour
         PrepareNextSpawn();
         spawnCoroutine = StartCoroutine(SpawnRoutine());
         Debug.Log("🔄 Spawner 已重置");
-    }
-
-    // ---------- 音效辅助 ----------
-    IEnumerator PlaySoundDelayed(AudioSource source, float startTime, float delay, bool loop)
-    {
-        if (source == null || source.clip == null) yield break;
-        if (delay > 0)
-            yield return new WaitForSecondsRealtime(delay);
-        source.time = startTime;
-        source.loop = loop;
-        source.Play();
     }
 }
